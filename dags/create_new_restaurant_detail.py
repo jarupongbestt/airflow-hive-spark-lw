@@ -7,13 +7,13 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
 spark = SparkSession.builder \
-            .appName("test") \
-            .config("spark.hadoop.hive.metastore.uris", "thrift://metastore:9083") \
-            .config("spark.sql.warehouse.dir", "/opt/hive/data/warehouse") \
-            .config("spark.driver.memory", "4g") \
-            .config("spark.executor.memory", "4g") \
-            .enableHiveSupport() \
-            .getOrCreate()
+    .appName("test") \
+    .config("spark.hadoop.hive.metastore.uris", "thrift://metastore:9083") \
+    .config("spark.sql.warehouse.dir", "/opt/hive/data/warehouse") \
+    .config("spark.driver.memory", "4g") \
+    .config("spark.executor.memory", "4g") \
+    .enableHiveSupport() \
+    .getOrCreate()
 
 @dag(
     dag_id="create_new_restaurant_detail",
@@ -23,6 +23,7 @@ def create_new_restaurant_detail_dag():
 
     @task
     def transform_load_new_restaurant_detail():
+
         spark_df_restaurant_new = spark.sql("SELECT * FROM restaurant_detail")
         spark_df_restaurant_new = spark_df_restaurant_new.withColumn(
             "cooking_bin", 

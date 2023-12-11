@@ -32,14 +32,15 @@ pg_engine = create_engine(
 )
 
 spark = SparkSession.builder \
-            .appName("test") \
-            .config("spark.hadoop.hive.metastore.uris", "thrift://localhost:9083") \
-            .config("spark.sql.warehouse.dir", "/opt/hive/data/warehouse") \
-            .config("spark.driver.memory", "16g") \
-            .config("spark.executor.memory", "16g") \
-            .enableHiveSupport() \
-            .getOrCreate()
+    .appName("test") \
+    .config("spark.hadoop.hive.metastore.uris", "thrift://metastore:9083") \
+    .config("spark.sql.warehouse.dir", "/opt/hive/data/warehouse") \
+    .config("spark.driver.memory", "4g") \
+    .config("spark.executor.memory", "4g") \
+    .enableHiveSupport() \
+    .getOrCreate()
 
+print(f"spark warehouse dir: {spark.conf.get('spark.sql.warehouse.dir')}")
 
 @dag(
     dag_id="etl_order_restaurant_detail",
@@ -48,38 +49,38 @@ spark = SparkSession.builder \
     catchup=False,
 )
 def order_detail_dag():
-    # @task
-    # def store_order_detail():
+    @task
+    def store_order_detail():
 
-    #     try:
-    #         # create and insert into order_detail table
-    #         with pg_engine.connect() as conn:
-    #             df_order_detail = pd.read_csv("./sources/order_detail.csv")
-    #             df_order_detail["order_created_timestamp"] = pd.to_datetime(
-    #                 df_order_detail["order_created_timestamp"], format="%Y-%m-%d %H:%M:%S"
-    #             )
-    #             print("Creating or Inserting order_detail table...")
-    #             df_order_detail.to_sql(
-    #                 "order_detail", conn, if_exists="replace", index=False
-    #             )
-    #             print("Done!")
-    #     except SQLAlchemyError as e:
-    #         print(f"Error while inserting or creating database: {e}")
+        try:
+            # create and insert into order_detail table
+            with pg_engine.connect() as conn:
+                df_order_detail = pd.read_csv("./sources/order_detail.csv")
+                df_order_detail["order_created_timestamp"] = pd.to_datetime(
+                    df_order_detail["order_created_timestamp"], format="%Y-%m-%d %H:%M:%S"
+                )
+                print("Creating or Inserting order_detail table...")
+                df_order_detail.to_sql(
+                    "order_detail", conn, if_exists="replace", index=False
+                )
+                print("Done!")
+        except SQLAlchemyError as e:
+            print(f"Error while inserting or creating database: {e}")
     
-    # @task
-    # def store_restaurant_detail():
+    @task
+    def store_restaurant_detail():
 
-    #     try:
-    #         with pg_engine.connect() as conn:
-    #             # create and insert into restaurant table
-    #             df_restaurant = pd.read_csv("./sources/restaurant_detail.csv")
-    #             print("Creating or Inserting restaurant_detail table...")
-    #             df_restaurant.to_sql(
-    #                 "restaurant_detail", conn, if_exists="replace", index=False
-    #             )
-    #             print("Done!")
-    #     except SQLAlchemyError as e:
-    #         print(f"Error while inserting or creating database: {e}")
+        try:
+            with pg_engine.connect() as conn:
+                # create and insert into restaurant table
+                df_restaurant = pd.read_csv("./sources/restaurant_detail.csv")
+                print("Creating or Inserting restaurant_detail table...")
+                df_restaurant.to_sql(
+                    "restaurant_detail", conn, if_exists="replace", index=False
+                )
+                print("Done!")
+        except SQLAlchemyError as e:
+            print(f"Error while inserting or creating database: {e}")
 
     @task 
     def transform_load_restaurant_detail():
@@ -103,29 +104,29 @@ def order_detail_dag():
             spark_df_restaurant = spark.createDataFrame(df_restaurant)
             spark_df_restaurant.write.mode("overwrite").format("parquet").partitionBy("dt").saveAsTable("restaurant_detail")
     
-    # @task
-    # def transform_load_order_detail():
+    @task
+    def transform_load_order_detail():
 
-    #     with pg_engine.connect() as pg_conn:
-    #         ## use pandas read postgres instead spark because cannot connect to jdbc drivers
-    #         df_order_detail = pd.read_sql_query("select * from public.order_detail", pg_conn)
-    #         spark_df_order = spark.createDataFrame(df_order_detail) 
-    #         spark_df_order = spark_df_order.withColumn("dt", date_format(col("order_created_timestamp"),"yyyymmdd"))
-    #         spark_df_order.write.mode("overwrite").format("parquet").partitionBy("dt").saveAsTable("order_detail")
+        with pg_engine.connect() as pg_conn:
+            ## use pandas read postgres instead spark because cannot connect to jdbc drivers
+            df_order_detail = pd.read_sql_query("select * from public.order_detail", pg_conn)
+            spark_df_order = spark.createDataFrame(df_order_detail) 
+            spark_df_order = spark_df_order.withColumn("dt", date_format(col("order_created_timestamp"),"yyyymmdd"))
+            spark_df_order.write.mode("overwrite").format("parquet").partitionBy("dt").saveAsTable("order_detail")
                 
 
-    # start = EmptyOperator(task_id="start")
-    # end = EmptyOperator(task_id="end")
+    start = EmptyOperator(task_id="start")
+    end = EmptyOperator(task_id="end")
 
-    # store_order_detail = store_order_detail()
-    # transform_load_order_detail = transform_load_order_detail()
-    # store_restaurant_detail = store_restaurant_detail()
+    store_order_detail = store_order_detail()
+    transform_load_order_detail = transform_load_order_detail()
+    store_restaurant_detail = store_restaurant_detail()
     transform_load_restaurant_detail = transform_load_restaurant_detail()
 
-    # trigger_create_new_order_detail = TriggerDagRunOperator(
-    #     task_id="trigger_create_new_order_detail",
-    #     trigger_dag_id="create_new_order_detail"
-    # )
+    trigger_create_new_order_detail = TriggerDagRunOperator(
+        task_id="trigger_create_new_order_detail",
+        trigger_dag_id="create_new_order_detail"
+    )
 
     trigger_create_new_restaurant_detail = TriggerDagRunOperator(
         task_id="trigger_create_new_restaurant_detail",
@@ -134,12 +135,12 @@ def order_detail_dag():
 
 
 
-    # start >> [store_order_detail, store_restaurant_detail]
-    # store_order_detail >> [transform_load_order_detail,transform_load_restaurant_detail]
-    # store_restaurant_detail >> [transform_load_order_detail,transform_load_restaurant_detail]
-    # transform_load_order_detail >> trigger_create_new_order_detail
+    start >> [store_order_detail, store_restaurant_detail]
+    store_order_detail >> [transform_load_order_detail,transform_load_restaurant_detail]
+    store_restaurant_detail >> [transform_load_order_detail,transform_load_restaurant_detail]
+    transform_load_order_detail >> trigger_create_new_order_detail
     transform_load_restaurant_detail >> trigger_create_new_restaurant_detail
-    # [trigger_create_new_order_detail,trigger_create_new_restaurant_detail] >> end
+    [trigger_create_new_order_detail,trigger_create_new_restaurant_detail] >> end
 
 
 
