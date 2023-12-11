@@ -14,3 +14,5 @@ For my pipeline, I used airflow to schedule etl processes. You can access airflo
 ! [alt text](airflow-block-failed-logs.png "Airflow Failed Logs")
 
 So you can try to run each etl processes with hive-spark.ipynb and store_csv.ipynb in playground/notebooks directory. I have no idea why it failed on airflow but it works on my local machine(ipynb).
+
+Here is my github repo if you cannot download file: https://github.com/jarupongbestt/airflow-hive-spark-lw
